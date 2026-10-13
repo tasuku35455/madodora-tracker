@@ -1,0 +1,1760 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>まどドラ ★5キオク凸状況管理</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body {
+    background: #0b0d14;
+    color: #e2e8f0;
+    font-family: sans-serif;
+  }
+
+  .glass-panel {
+    background: rgba(20, 25, 40, .95);
+    border: 1px solid rgba(255, 255, 255, .08);
+  }
+
+  .star-btn {
+    transition: color .15s, transform .15s;
+  }
+
+  .star-btn:active {
+    transform: scale(1.15);
+  }
+
+  .star-btn.active {
+    color: #f59e0b;
+    text-shadow: 0 0 8px rgba(245, 158, 11, .8);
+  }
+
+  .star-btn.inactive {
+    color: #334155;
+  }
+
+  input, select, button {
+    color-scheme: dark;
+  }
+
+  .type-icon {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  .type-icon-small {
+    width: 23px;
+    height: 23px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+
+<body class="min-h-screen pb-12">
+
+<header class="sticky top-0 z-40 glass-panel px-3 py-3 shadow-xl">
+  <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
+    <div>
+      <h1 class="font-bold text-pink-400">★5 まどドラ 凸状況チェッカー</h1>
+      <p class="text-xs text-slate-400">魔法少女まどか☆マギカ Magia Exedra</p>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button onclick="openModal()"
+        class="px-3 py-2 bg-pink-600 rounded-lg text-sm">
+        ＋ キオク追加
+      </button>
+
+      <button onclick="exportData()"
+        class="px-3 py-2 bg-slate-800 rounded-lg text-sm">
+        バックアップ
+      </button>
+
+      <button onclick="document.getElementById('importFile').click()"
+        class="px-3 py-2 bg-slate-800 rounded-lg text-sm">
+        復元
+      </button>
+
+      <button onclick="resetOwnership()"
+        class="px-3 py-2 bg-red-900 rounded-lg text-sm">
+        所持状況リセット
+      </button>
+    </div>
+  </div>
+</header>
+
+<section class="max-w-7xl mx-auto px-3 mt-3">
+  <div class="glass-panel rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+    <div class="min-w-0">
+      <p class="font-semibold">☁ PC・スマホ間のクラウド同期</p>
+      <p id="cloudStatus" class="text-sm text-slate-300" role="status">未ログイン：この端末内に保存されています</p>
+      <p id="cloudUser" class="text-xs text-slate-400 break-all"></p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button id="cloudLoginBtn" type="button" class="px-3 py-2 rounded-lg text-sm bg-blue-600 hover:bg-blue-500">Googleでログイン・同期</button>
+      <button id="cloudLogoutBtn" type="button" class="px-3 py-2 rounded-lg text-sm bg-slate-700 hidden">ログアウト</button>
+    </div>
+  </div>
+</section>
+
+<main class="max-w-7xl mx-auto px-3 mt-4">
+
+  <!-- 統計 -->
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+    <div class="glass-panel p-3 rounded-xl">
+      <p class="text-xs text-slate-400">登録数</p>
+      <b id="statTotal">0</b>
+    </div>
+
+    <div class="glass-panel p-3 rounded-xl">
+      <p class="text-xs text-slate-400">所持数</p>
+      <b id="statOwned" class="text-emerald-400">0</b>
+    </div>
+
+    <div class="glass-panel p-3 rounded-xl">
+      <p class="text-xs text-slate-400">所持率</p>
+      <b id="statRate" class="text-pink-400">0%</b>
+    </div>
+
+    <div class="glass-panel p-3 rounded-xl">
+      <p class="text-xs text-slate-400">完凸数</p>
+      <b id="statMax" class="text-yellow-400">0</b>
+    </div>
+  </section>
+
+  <!-- 検索・絞り込み -->
+  <section class="glass-panel rounded-xl p-3 mb-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+
+      <input
+        id="search"
+        oninput="render()"
+        placeholder="キオク名で検索"
+        class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
+      >
+
+      <select
+        id="elementFilter"
+        onchange="render()"
+        class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
+      >
+        <option value="ALL">すべての属性</option>
+        <option value="火">火属性</option>
+        <option value="水">水属性</option>
+        <option value="木">木属性</option>
+        <option value="光">光属性</option>
+        <option value="闇">闇属性</option>
+        <option value="無">無属性</option>
+        <option value="未設定">属性未設定</option>
+      </select>
+
+      <select
+        id="roleFilter"
+        onchange="render()"
+        class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
+      >
+        <option value="ALL">すべてのロール</option>
+        <option value="アタッカー">アタッカー</option>
+        <option value="ブレイカー">ブレイカー</option>
+        <option value="ディフェンダー">ディフェンダー</option>
+        <option value="ヒーラー">ヒーラー</option>
+        <option value="バッファー">バッファー</option>
+        <option value="デバッファー">デバッファー</option>
+        <option value="未設定">ロール未設定</option>
+      </select>
+
+      <select
+        id="statusFilter"
+        onchange="render()"
+        class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
+      >
+        <option value="ALL">すべての所持状況</option>
+        <option value="OWNED">所持中</option>
+        <option value="UNOWNED">未所持</option>
+        <option value="ZERO">所持中（0凸）</option>
+        <option value="MAX">完凸（5凸）</option>
+      </select>
+    </div>
+
+    <div class="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+      <span>表示中 <b id="countDisplay" class="text-pink-400">0</b> 件</span>
+      <span>所持中 <b id="ownedDisplay" class="text-emerald-400">0</b> 件</span>
+      <span>0凸所持 <b id="zeroCount" class="text-cyan-400">0</b> 件</span>
+      <span>完凸 <b id="maxCount" class="text-yellow-400">0</b> 件</span>
+      <span>属性・ロール未設定 <b id="unsetCount" class="text-orange-300">0</b> 件</span>
+    </div>
+  </section>
+
+  <!-- アイコン凡例 -->
+  <section class="glass-panel rounded-xl p-3 mb-4">
+    <p class="text-xs text-slate-400 mb-2">アイコンの見方</p>
+
+    <div class="flex flex-wrap gap-x-4 gap-y-3">
+      <div class="flex items-center gap-1">
+        <img src="icons/frame.png" class="type-icon-small" alt="火">
+        <span class="text-xs">火</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/aqua.png" class="type-icon-small" alt="水">
+        <span class="text-xs">水</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/forest.png" class="type-icon-small" alt="木">
+        <span class="text-xs">木</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/light.png" class="type-icon-small" alt="光">
+        <span class="text-xs">光</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/dark.png" class="type-icon-small" alt="闇">
+        <span class="text-xs">闇</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/void.png" class="type-icon-small" alt="無">
+        <span class="text-xs">無</span>
+      </div>
+    </div>
+
+    <div class="border-t border-slate-800 my-3"></div>
+
+    <div class="flex flex-wrap gap-x-4 gap-y-3">
+      <div class="flex items-center gap-1">
+        <img src="icons/attacker.png" class="type-icon-small" alt="アタッカー">
+        <span class="text-xs">アタッカー</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/breaker.png" class="type-icon-small" alt="ブレイカー">
+        <span class="text-xs">ブレイカー</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/defender.png" class="type-icon-small" alt="ディフェンダー">
+        <span class="text-xs">ディフェンダー</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/healer.png" class="type-icon-small" alt="ヒーラー">
+        <span class="text-xs">ヒーラー</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/buffer.png" class="type-icon-small" alt="バッファー">
+        <span class="text-xs">バッファー</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <img src="icons/debuffer.png" class="type-icon-small" alt="デバッファー">
+        <span class="text-xs">デバッファー</span>
+      </div>
+    </div>
+  </section>
+
+  <div id="cardGrid"
+    class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+  </div>
+
+  <p id="emptyMessage" class="hidden text-center py-10 text-slate-400">
+    条件に一致するキオクがありません。
+  </p>
+
+  <p class="text-center text-xs text-slate-500 mt-5">
+    属性・ロールは編集画面から変更できます。
+  </p>
+</main>
+
+<!-- 追加・編集モーダル -->
+<div id="modal"
+  class="hidden fixed inset-0 z-50 bg-black/80 items-center justify-center p-3">
+
+  <div class="glass-panel p-5 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+    <h2 id="modalHeading" class="font-bold text-pink-400 mb-4">
+      キオクを追加
+    </h2>
+
+    <div class="space-y-3 text-sm">
+
+      <label class="block">
+        キオク名
+        <input id="fTitle"
+          class="mt-1 w-full p-2 bg-slate-900 border border-slate-700 rounded-lg">
+      </label>
+
+      <label class="block">
+        画像ファイル名
+        <input id="fImg"
+          placeholder="show (1).webp"
+          class="mt-1 w-full p-2 bg-slate-900 border border-slate-700 rounded-lg">
+        <span class="text-xs text-slate-500">
+          madodoraフォルダ内の画像ファイル名
+        </span>
+      </label>
+
+      <div>
+        <p class="mb-1">属性</p>
+        <div id="elementChoices" class="grid grid-cols-3 gap-2"></div>
+      </div>
+
+      <div>
+        <p class="mb-1">ロール</p>
+        <div id="roleChoices" class="grid grid-cols-2 gap-2"></div>
+      </div>
+
+      <label class="block">
+        所持状況
+        <select id="fOwned"
+          class="mt-1 w-full p-2 bg-slate-900 border border-slate-700 rounded-lg">
+          <option value="false">未所持</option>
+          <option value="true">所持中</option>
+        </select>
+      </label>
+
+      <p class="text-xs text-slate-400">
+        アイコンをクリックすると属性・ロールを選択できます。
+      </p>
+    </div>
+
+    <div class="flex justify-end gap-2 mt-5">
+      <button onclick="closeModal()"
+        class="px-3 py-2 bg-slate-800 rounded-lg text-sm">
+        キャンセル
+      </button>
+
+      <button onclick="saveCard()"
+        class="px-4 py-2 bg-pink-600 rounded-lg text-sm font-bold">
+        保存
+      </button>
+    </div>
+  </div>
+</div>
+
+<input id="importFile" type="file" accept=".json,application/json" class="hidden">
+
+<script>
+"use strict";
+
+/* ==============================
+   保存キー
+============================== */
+
+const MASTER_KEY = "madodora_master_data_v2";
+const STATE_KEY = "madodora_star5_state_v1";
+const MIGRATION_KEY = "madodora_icon_migration_v2";
+
+/* ==============================
+   アイコン設定
+============================== */
+
+const ELEMENT_ICONS = {
+  "火": "frame.png",
+  "水": "aqua.png",
+  "木": "forest.png",
+  "光": "light.png",
+  "闇": "dark.png",
+  "無": "void.png"
+};
+
+const ROLE_ICONS = {
+  "アタッカー": "attacker.png",
+  "ブレイカー": "breaker.png",
+  "ディフェンダー": "defender.png",
+  "ヒーラー": "healer.png",
+  "バッファー": "buffer.png",
+  "デバッファー": "debuffer.png"
+};
+
+const ELEMENTS = ["火", "水", "木", "光", "闇", "無", "未設定"];
+
+const ROLES = [
+  "アタッカー",
+  "ブレイカー",
+  "ディフェンダー",
+  "ヒーラー",
+  "バッファー",
+  "デバッファー",
+  "未設定"
+];
+
+/* ==============================
+   キオク一覧
+============================== */
+
+const NAMES = [
+  "アクア・テンペスト",
+  "金属体への変換と投擲",
+  "デンジャラスグロかわカーニバル",
+  "ウワサの雷扇痺舞",
+  "ウィンクティオ☆マギカ",
+  "グランディオーソ・シンフォニア",
+  "スピエタータ・スカーリカ",
+  "赫奕の福音",
+  "アブソリュート・ヴィーナス",
+  "エヴォルツィオーネ・プレゼンテ",
+  "あーしのヤバめなハート",
+  "アトモ・アラビアート",
+  "真夏のファイヤーアタック！",
+  "キュウべえボムによる爆破攻撃",
+  "ご招待のドッペル",
+  "断罪の光芒",
+  "ラ・ポルトウ・ドゥ・パラディ",
+  "デサンテグラシオン",
+  "ロンブル",
+  "例外のほうが多い規則",
+  "螺旋帰道",
+  "怪異殺し",
+  "フローラル・アイアンスパイク",
+  "ファイナル・フェイトブルーム",
+  "ラ・ダンス・マカブル",
+  "ラ・リュミエール",
+  "パンナ・ヴォルティコーザ",
+  "紅珠焼菓",
+  "魔法のケーキドーム",
+  "事象の改竄",
+  "天翔ける語り部",
+  "無思考",
+  "プルウィア☆ノイヤー",
+  "キラハピ！スノードーム",
+  "セイクリッド・ギフト",
+  "聖夜捧呈",
+  "ボンナターレ・グラツィオーソ",
+  "解はデジャ・ブ",
+  "Marigold Dadaism",
+  "ベベ・オー・ランタン",
+  "アサルトパラノイア",
+  "絶対自壊演舞",
+  "黒い魔力による制圧",
+  "刻み込む桜の物語",
+  "漆黒のアルカナ",
+  "ルーチェ・スペランツァー",
+  "ティロフィナーレリベレーション",
+  "メロディア・アパッショナータ",
+  "プルウィア☆クララ",
+  "フィオレ・フィナーレ",
+  "Nine Phases",
+  "創造の子どもたち",
+  "ネオ・ジェネシス☆彡",
+  "桜語り",
+  "桜隠れ",
+  "ホロウ・ウーマン",
+  "沈黙のドッペル",
+  "もう絶望する必要なんてない！",
+  "時間停止攻撃",
+  "バルダメンテ・フォルティッシモ",
+  "ジャッジメントアース",
+  "インフィニットポセイドン",
+  "エッジオブユニヴァース",
+  "盟神抉槍",
+  "ティロ・フィナーレ",
+  "ルクス☆マギカ",
+  "プルウィア☆マギカ",
+  "ミサイルによる集中砲火",
+  "ストラーダ・フトゥーロ",
+  "アブソリュート・レイン",
+  "炎扇斬舞",
+  "フォルターゲフェングニス",
+  "ウルトラグレートビッグハンマー"
+];
+
+/*
+ 既存のキオクデータとの互換性を優先し，
+ 保存済みの属性・ロールがあればそれを使用します。
+
+ 新規データの属性・ロールは編集画面から設定できます。
+*/
+const META = [
+ ["水","バッファー"],
+ ["火","アタッカー"],
+ ["無","バッファー"],
+ ["火","ディフェンダー"],
+ ["光","デバッファー"],
+ ["水","ヒーラー"],
+ ["木","ディフェンダー"],
+ ["闇","ブレイカー"],
+ ["水","アタッカー"],
+ ["水","アタッカー"],
+ ["火","ヒーラー"],
+ ["木","アタッカー"],
+ ["火","バッファー"],
+ ["闇","デバッファー"],
+ ["光","アタッカー"],
+ ["無","ブレイカー"],
+ ["光","デバッファー"],
+ ["水","ディフェンダー"],
+ ["闇","バッファー"],
+ ["木","アタッカー"],
+ ["水","ディフェンダー"],
+ ["火","アタッカー"],
+ ["光","ブレイカー"],
+ ["闇","アタッカー"],
+ ["無","デバッファー"],
+ ["光","ディフェンダー"],
+ ["木","ヒーラー"],
+ ["火","アタッカー"],
+ ["光","ヒーラー"],
+ ["闇","アタッカー"],
+ ["無","ヒーラー"],
+ ["闇","ディフェンダー"],
+ ["光","バッファー"],
+ ["火","ヒーラー"],
+ ["水","アタッカー"],
+ ["火","デバッファー"],
+ ["水","バッファー"],
+ ["無","アタッカー"],
+ ["火","ヒーラー"],
+ ["闇","デバッファー"],
+ ["闇","アタッカー"],
+ ["無","ヒーラー"],
+ ["無","ブレイカー"],
+ ["水","ブレイカー"],
+ ["木","アタッカー"],
+ ["闇","バッファー"],
+ ["闇","ブレイカー"],
+ ["水","デバッファー"],
+ ["水","ヒーラー"],
+ ["木","ディフェンダー"],
+ ["無","アタッカー"],
+ ["木","ディフェンダー"],
+ ["火","アタッカー"],
+ ["光","デバッファー"],
+ ["闇","アタッカー"],
+ ["光","バッファー"],
+ ["闇","ヒーラー"],
+ ["光","ブレイカー"],
+ ["無","バッファー"],
+ ["水","ディフェンダー"],
+ ["木","ヒーラー"],
+ ["水","アタッカー"],
+ ["火","ブレイカー"],
+ ["火","ブレイカー"],
+ ["木","バッファー"],
+ ["光","アタッカー"],
+ ["光","アタッカー"],
+ ["闇","ブレイカー"],
+ ["光","アタッカー"],
+ ["水","ブレイカー"],
+ ["火","バッファー"],
+ ["木","ディフェンダー"],
+ ["闇","デバッファー"],
+];
+
+/* ==============================
+   アプリの状態
+============================== */
+
+let masterData = [];
+let userState = {};
+let editingId = null;
+let selectedElement = "未設定";
+let selectedRole = "未設定";
+
+/* ==============================
+   初期データ
+============================== */
+
+function initialMaster() {
+  return NAMES.map((title, i) => ({
+    id: i + 1,
+    title,
+    img: `madodora/${i === 0 ? "show.webp" : `show (${i}).webp`}`,
+    elem: META[i]?.[0] || "未設定",
+    role: META[i]?.[1] || "未設定"
+  }));
+}
+
+function normalizeMaster(data) {
+  if (!Array.isArray(data)) {
+    throw new Error("マスターデータが不正です");
+  }
+
+  const ids = new Set();
+
+  return data.map(item => {
+    const id = Number(item.id);
+
+    if (!Number.isSafeInteger(id) || id < 1 || ids.has(id)) {
+      throw new Error("キオクIDが不正です");
+    }
+
+    ids.add(id);
+
+    return {
+      id,
+      title: String(item.title ?? `キオク #${id}`),
+      img: String(item.img || ""),
+      elem: ELEMENTS.includes(item.elem) ? item.elem : "未設定",
+      role: ROLES.includes(item.role) ? item.role : "未設定"
+    };
+  });
+}
+
+function normalizeState(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return {};
+  }
+
+  const result = {};
+
+  for (const [id, value] of Object.entries(data)) {
+    if (typeof value === "number") {
+      const n = Math.max(0, Math.min(5, Math.floor(value)));
+
+      result[id] = {
+        owned: n > 0,
+        totsu: n
+      };
+
+    } else if (value && typeof value === "object") {
+      const n = Math.max(
+        0,
+        Math.min(5, Math.floor(Number(value.totsu) || 0))
+      );
+
+      result[id] = {
+        owned: !!value.owned,
+        totsu: value.owned ? n : 0
+      };
+    }
+  }
+
+  return result;
+}
+
+/* ==============================
+   保存・読み込み
+============================== */
+
+function saveAll() {
+  try {
+    localStorage.setItem(MASTER_KEY, JSON.stringify(masterData));
+    localStorage.setItem(STATE_KEY, JSON.stringify(userState));
+    if (typeof window.queueMadodoraCloudSave === "function") {
+      window.queueMadodoraCloudSave();
+    }
+    return true;
+  } catch (error) {
+    console.error(error);
+    alert("保存に失敗しました。ブラウザの保存容量を確認してください。");
+    return false;
+  }
+}
+
+function init() {
+  try {
+    const savedMaster = localStorage.getItem(MASTER_KEY);
+    const savedState = localStorage.getItem(STATE_KEY);
+
+    if (savedMaster) {
+      masterData = normalizeMaster(JSON.parse(savedMaster));
+    } else {
+      masterData = initialMaster();
+    }
+
+    userState = normalizeState(
+      savedState ? JSON.parse(savedState) : {}
+    );
+
+    /*
+      旧データに属性・ロールが保存されていない場合だけ補完します。
+      所持状況・凸数は変更しません。
+    */
+    if (localStorage.getItem(MIGRATION_KEY) !== "1") {
+      const initialByName = new Map(
+        initialMaster().map(item => [item.title, item])
+      );
+
+      masterData = masterData.map(item => {
+        const original = initialByName.get(item.title);
+
+        if (!original) return item;
+
+        return {
+          ...item,
+          elem: item.elem !== "未設定" ? item.elem : original.elem,
+          role: item.role !== "未設定" ? item.role : original.role
+        };
+      });
+
+      if (!saveAll()) return;
+
+      localStorage.setItem(MIGRATION_KEY, "1");
+    }
+
+    /*
+      確認済みロールの修正と、ロール未設定データの補完。
+      所持状況・凸数は変更しません。
+    */
+    const verifiedRoles = {
+      "金属体への変換と投擲": "アタッカー",
+      "デンジャラスグロかわカーニバル": "バッファー",
+      "ウィンクティオ☆マギカ": "デバッファー",
+      "グランディオーソ・シンフォニア": "ヒーラー",
+      "赫奕の福音": "アタッカー",
+      "アブソリュート・ヴィーナス": "ブレイカー",
+      "エヴォルツィオーネ・プレゼンテ": "アタッカー",
+      "アトモ・アラビアート": "デバッファー",
+      "あーしのヤバめなハート": "ヒーラー",
+      "真夏のファイヤーアタック！": "バッファー",
+      "キュウべえボムによる爆破攻撃": "デバッファー",
+      "ご招待のドッペル": "ブレイカー",
+      "断罪の光芒": "アタッカー",
+      "ラ・ポルトウ・ドゥ・パラディ": "アタッカー",
+      "ロンブル": "バッファー",
+      "デサンテグラシオン": "デバッファー",
+      "例外のほうが多い規則": "ブレイカー",
+      "螺旋帰道": "ディフェンダー",
+      "怪異殺し": "アタッカー",
+      "フローラル・アイアンスパイク": "アタッカー",
+      "ファイナル・フェイトブルーム": "ブレイカー",
+      "ラ・ダンス・マカブル": "デバッファー",
+      "ラ・リュミエール": "ディフェンダー",
+      "パンナ・ヴォルティコーザ": "ヒーラー",
+      "紅珠焼菓": "ブレイカー",
+      "魔法のケーキドーム": "ヒーラー",
+      "事象の改竄": "アタッカー",
+      "天翔ける語り部": "ディフェンダー",
+      "無思考": "デバッファー",
+      "プルウィア☆ノイヤー": "バッファー",
+      "セイクリッド・ギフト": "ブレイカー",
+      "キラハピ！スノードーム": "ヒーラー",
+      "聖夜捧呈": "デバッファー",
+      "ボンナターレ・グラツィオーソ": "バッファー",
+      "解はデジャ・ブ": "ブレイカー",
+      "Marigold Dadaism": "アタッカー",
+      "ベベ・オー・ランタン": "デバッファー",
+      "アサルトパラノイア": "ブレイカー",
+      "絶対自壊演舞": "ヒーラー",
+      "黒い魔力による制圧": "アタッカー",
+      "漆黒のアルカナ": "ブレイカー",
+      "刻み込む桜の物語": "アタッカー",
+      "ルーチェ・スペランツァー": "バッファー",
+      "ティロフィナーレリベレーション": "アタッカー",
+      "プルウィア☆クララ": "ヒーラー",
+      "メロディア・アパッショナータ": "デバッファー",
+      "フィオレ・フィナーレ": "アタッカー",
+      "Nine Phases": "ブレイカー",
+      "ネオ・ジェネシス☆彡": "ブレイカー",
+      "創造の子どもたち": "デバッファー",
+      "桜隠れ": "ブレイカー",
+      "桜語り": "デバッファー",
+      "ホロウ・ウーマン": "バッファー",
+      "沈黙のドッペル": "ヒーラー",
+      "もう絶望する必要なんてない！": "アタッカー",
+      "時間停止攻撃": "バッファー",
+      "バルダメンテ・フォルティッシモ": "ディフェンダー",
+      "エッジオブユニヴァース": "アタッカー",
+      "インフィニットポセイドン": "ブレイカー",
+      "ジャッジメントアース": "ヒーラー",
+      "盟神抉槍": "アタッカー",
+      "ティロ・フィナーレ": "バッファー",
+      "ルクス☆マギカ": "ブレイカー",
+      "プルウィア☆マギカ": "ブレイカー",
+      "ミサイルによる集中砲火": "アタッカー",
+      "ストラーダ・フトゥーロ": "ブレイカー",
+      "アブソリュート・レイン": "アタッカー",
+      "炎扇斬舞": "バッファー",
+      "フォルターゲフェングニス": "ディフェンダー",
+      "ウルトラグレートビッグハンマー": "デバッファー"
+    };
+    const verifiedElements = {
+      "ルーチェ・スペランツァー": "闇",
+      "ルーチェ・スペランツァ": "闇",
+      "プルウィア☆ノイヤー": "光",
+      "プルウィア☆ノイヤ": "光"
+    };
+    // 旧保存データに末尾の長音「ー」がない表記が残っていても補完する
+    const verifiedRoleAliases = {
+      "ルーチェ・スペランツァ": "バッファー",
+      "プルウィア☆ノイヤ": "バッファー"
+    };
+    const initialByName = new Map(
+      initialMaster().map(item => [item.title, item])
+    );
+    let roleDataChanged = false;
+
+    masterData = masterData.map(item => {
+      const original = initialByName.get(item.title);
+      let role = item.role;
+      let elem = item.elem;
+
+      const forcedRole = verifiedRoles[item.title] || verifiedRoleAliases[item.title];
+      if (forcedRole && role !== forcedRole) {
+        role = forcedRole;
+      } else if (role === "未設定" && original && original.role !== "未設定") {
+        role = original.role;
+      }
+      if (verifiedElements[item.title] && elem !== verifiedElements[item.title]) {
+        elem = verifiedElements[item.title];
+      }
+
+      if (role !== item.role || elem !== item.elem) roleDataChanged = true;
+      return role === item.role && elem === item.elem ? item : { ...item, role, elem };
+    });
+
+    if (roleDataChanged && !saveAll()) return;
+
+    buildChoiceButtons();
+    render();
+
+  } catch (error) {
+    console.error(error);
+    alert(
+      "保存データの読み込みに失敗しました。バックアップがあれば復元してください。"
+    );
+  }
+}
+
+function stateOf(id) {
+  const state = userState[id];
+
+  if (typeof state === "number") {
+    const n = Math.max(0, Math.min(5, state));
+
+    return {
+      owned: n > 0,
+      totsu: n
+    };
+  }
+
+  if (state && typeof state === "object") {
+    return {
+      owned: !!state.owned,
+      totsu: Math.max(0, Math.min(5, Number(state.totsu) || 0))
+    };
+  }
+
+  return {
+    owned: false,
+    totsu: 0
+  };
+}
+
+/* ==============================
+   アイコン表示
+============================== */
+
+function createTypeIcon(filename, label, small = false) {
+  const img = document.createElement("img");
+
+  img.src = `icons/${filename}`;
+  img.alt = label;
+  img.title = label;
+  img.className = small ? "type-icon-small" : "type-icon";
+
+  img.onerror = function () {
+    this.style.display = "none";
+  };
+
+  return img;
+}
+
+function createElementIcon(element, small = false) {
+  const filename = ELEMENT_ICONS[element];
+
+  if (!filename) {
+    return createFallbackLabel("属性未設定");
+  }
+
+  return createTypeIcon(filename, element, small);
+}
+
+function createRoleIcon(role, small = false) {
+  const filename = ROLE_ICONS[role];
+
+  if (!filename) {
+    return createFallbackLabel("ロール未設定");
+  }
+
+  return createTypeIcon(filename, role, small);
+}
+
+function createFallbackLabel(text) {
+  const span = document.createElement("span");
+  span.className = "text-[10px] text-slate-500";
+  span.textContent = text;
+  return span;
+}
+
+/* ==============================
+   属性・ロール選択UI
+============================== */
+
+function buildChoiceButtons() {
+  const elementContainer = document.getElementById("elementChoices");
+  const roleContainer = document.getElementById("roleChoices");
+
+  elementContainer.replaceChildren();
+  roleContainer.replaceChildren();
+
+  ELEMENTS.forEach(element => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      "flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-slate-700 bg-slate-900";
+
+    button.onclick = () => {
+      selectedElement = element;
+      updateChoiceHighlights();
+    };
+
+    if (ELEMENT_ICONS[element]) {
+      button.append(createElementIcon(element));
+    } else {
+      button.append(createFallbackLabel("？"));
+    }
+
+    const label = document.createElement("span");
+    label.className = "text-xs";
+    label.textContent = element;
+    button.append(label);
+
+    button.dataset.value = element;
+    elementContainer.append(button);
+  });
+
+  ROLES.forEach(role => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      "flex items-center gap-2 p-2 rounded-lg border border-slate-700 bg-slate-900";
+
+    button.onclick = () => {
+      selectedRole = role;
+      updateChoiceHighlights();
+    };
+
+    if (ROLE_ICONS[role]) {
+      button.append(createRoleIcon(role));
+    } else {
+      button.append(createFallbackLabel("？"));
+    }
+
+    const label = document.createElement("span");
+    label.className = "text-xs";
+    label.textContent = role;
+    button.append(label);
+
+    button.dataset.value = role;
+    roleContainer.append(button);
+  });
+
+  updateChoiceHighlights();
+}
+
+function updateChoiceHighlights() {
+  document.querySelectorAll("#elementChoices button").forEach(button => {
+    const active = button.dataset.value === selectedElement;
+
+    button.classList.toggle("border-pink-400", active);
+    button.classList.toggle("bg-pink-950", active);
+  });
+
+  document.querySelectorAll("#roleChoices button").forEach(button => {
+    const active = button.dataset.value === selectedRole;
+
+    button.classList.toggle("border-pink-400", active);
+    button.classList.toggle("bg-pink-950", active);
+  });
+}
+
+/* ==============================
+   追加・編集
+============================== */
+
+function openModal(id = null) {
+  editingId = id;
+
+  const item = id === null
+    ? null
+    : masterData.find(x => x.id === id);
+
+  document.getElementById("modalHeading").textContent =
+    item ? "キオクを編集" : "キオクを追加";
+
+  document.getElementById("fTitle").value = item?.title || "";
+  document.getElementById("fImg").value =
+    item?.img?.replace(/^madodora\//, "") ||
+    `show (${masterData.length}).webp`;
+
+  selectedElement = item?.elem || "未設定";
+  selectedRole = item?.role || "未設定";
+
+  document.getElementById("fOwned").value =
+    String(item ? stateOf(id).owned : false);
+
+  updateChoiceHighlights();
+
+  const modal = document.getElementById("modal");
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+}
+
+function closeModal() {
+  const modal = document.getElementById("modal");
+
+  modal.classList.add("hidden");
+  modal.classList.remove("flex");
+
+  editingId = null;
+}
+
+function saveCard() {
+  const title = document.getElementById("fTitle").value.trim();
+  const img = document.getElementById("fImg").value.trim();
+  const owned = document.getElementById("fOwned").value === "true";
+
+  if (!title || !img) {
+    alert("キオク名と画像ファイル名を入力してください。");
+    return;
+  }
+
+  if (/[\/\\]/.test(img)) {
+    alert("画像ファイル名だけを入力してください。");
+    return;
+  }
+
+  if (
+    !ELEMENTS.includes(selectedElement) ||
+    !ROLES.includes(selectedRole)
+  ) {
+    alert("属性またはロールの選択内容が不正です。");
+    return;
+  }
+
+  if (editingId !== null) {
+    const item = masterData.find(x => x.id === editingId);
+
+    if (!item) return;
+
+    item.title = title;
+    item.img = `madodora/${img}`;
+    item.elem = selectedElement;
+    item.role = selectedRole;
+
+    const oldState = stateOf(editingId);
+
+    userState[editingId] = {
+      owned,
+      totsu: owned ? oldState.totsu : 0
+    };
+
+  } else {
+    const id = Math.max(0, ...masterData.map(x => x.id)) + 1;
+
+    masterData.push({
+      id,
+      title,
+      img: `madodora/${img}`,
+      elem: selectedElement,
+      role: selectedRole
+    });
+
+    userState[id] = {
+      owned,
+      totsu: 0
+    };
+  }
+
+  if (saveAll()) {
+    closeModal();
+    render();
+  }
+}
+
+function deleteCard(id) {
+  const item = masterData.find(x => x.id === id);
+
+  if (!item) return;
+
+  if (!confirm(`「${item.title}」を削除しますか？`)) {
+    return;
+  }
+
+  const oldMaster = masterData;
+  const oldState = userState;
+
+  masterData = masterData.filter(x => x.id !== id);
+
+  userState = { ...userState };
+  delete userState[id];
+
+  if (!saveAll()) {
+    masterData = oldMaster;
+    userState = oldState;
+    return;
+  }
+
+  render();
+}
+
+/* ==============================
+   所持状況・凸数
+============================== */
+
+function setOwned(id, owned) {
+  const state = stateOf(id);
+
+  userState[id] = {
+    owned: !!owned,
+    totsu: owned ? state.totsu : 0
+  };
+
+  if (saveAll()) render();
+}
+
+function setTotsu(id, count) {
+  userState[id] = {
+    owned: true,
+    totsu: Math.max(0, Math.min(5, Math.floor(count)))
+  };
+
+  if (saveAll()) render();
+}
+
+/* ==============================
+   カード生成
+============================== */
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+
+  return node;
+}
+
+function btn(text, className, callback, title = "") {
+  const button = el("button", className, text);
+
+  button.type = "button";
+  button.onclick = callback;
+
+  if (title) button.title = title;
+
+  return button;
+}
+
+function makeCard(item) {
+  const state = stateOf(item.id);
+  const owned = state.owned;
+  const totsu = state.totsu;
+
+  const card = el(
+    "div",
+    "glass-panel rounded-xl overflow-hidden flex flex-col justify-between border-l-4 " +
+    (owned ? "border-emerald-500" : "border-slate-600")
+  );
+
+  const upper = el("div", "");
+
+  /* キオク画像 */
+  const imageBox = el(
+    "div",
+    "relative aspect-[4/3] bg-slate-900 overflow-hidden"
+  );
+
+  const img = el("img", "w-full h-full object-cover");
+  img.src = item.img;
+  img.alt = item.title;
+  img.loading = "lazy";
+
+  img.onerror = function () {
+    if (this.dataset.fallback) return;
+
+    this.dataset.fallback = "1";
+
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150">` +
+      `<rect width="100%" height="100%" fill="#1e293b"/>` +
+      `<text x="50%" y="50%" fill="#94a3b8" font-size="16" ` +
+      `dominant-baseline="middle" text-anchor="middle">No.${item.id}</text>` +
+      `</svg>`;
+
+    this.src =
+      "data:image/svg+xml;charset=UTF-8," +
+      encodeURIComponent(svg);
+  };
+
+  imageBox.append(img);
+
+  /* 所持・凸バッジ */
+  const badge = el(
+    "span",
+    "absolute top-1 right-1 text-[9px] font-bold px-1.5 py-1 rounded " +
+    (!owned
+      ? "bg-slate-800"
+      : totsu === 0
+        ? "bg-cyan-700"
+        : totsu === 5
+          ? "bg-yellow-500 text-black"
+          : "bg-pink-600")
+  );
+
+  badge.textContent = !owned
+    ? "未所持"
+    : totsu === 0
+      ? "0凸"
+      : totsu === 5
+        ? "完凸"
+        : `${totsu}凸`;
+
+  imageBox.append(badge);
+
+  imageBox.append(btn(
+    "編集",
+    "absolute top-1 left-1 bg-slate-700 text-white text-[10px] px-2 py-1 rounded",
+    () => openModal(item.id)
+  ));
+
+  imageBox.append(btn(
+    "削除",
+    "absolute top-8 left-1 bg-red-700 text-white text-[10px] px-2 py-1 rounded",
+    () => deleteCard(item.id)
+  ));
+
+  upper.append(imageBox);
+
+  /* キオク名 */
+  const info = el("div", "p-2 text-center");
+
+  const title = el(
+    "p",
+    "text-[11px] font-bold text-pink-300 leading-relaxed",
+    item.title
+  );
+
+  title.title = item.title;
+  info.append(title);
+
+  /*
+    属性アイコンとロールアイコンを横並びに表示
+  */
+  const iconRow = el(
+    "div",
+    "flex justify-center items-center gap-3 mt-2 min-h-[32px]"
+  );
+
+  const elementWrap = el(
+    "div",
+    "flex flex-col items-center gap-0.5"
+  );
+
+  elementWrap.append(createElementIcon(item.elem));
+
+  const elementLabel = el(
+    "span",
+    "text-[9px] text-slate-400",
+    item.elem === "未設定" ? "属性未設定" : item.elem
+  );
+
+  elementWrap.append(elementLabel);
+
+  const roleWrap = el(
+    "div",
+    "flex flex-col items-center gap-0.5"
+  );
+
+  roleWrap.append(createRoleIcon(item.role));
+
+  const roleLabel = el(
+    "span",
+    "text-[9px] text-slate-400",
+    item.role === "未設定" ? "ロール未設定" : item.role
+  );
+
+  roleWrap.append(roleLabel);
+
+  iconRow.append(elementWrap, roleWrap);
+  info.append(iconRow);
+
+  upper.append(info);
+  card.append(upper);
+
+  /* 所持ボタン */
+  card.append(btn(
+    owned ? "✓ 所持中" : "＋ 所持にする",
+    "mx-2 mb-2 py-1 rounded text-[10px] font-bold " +
+    (owned ? "bg-emerald-800" : "bg-slate-800"),
+    () => setOwned(item.id, !owned)
+  ));
+
+  /* 凸操作 */
+  const footer = el(
+    "div",
+    "p-2 border-t border-slate-800 bg-slate-950/40"
+  );
+
+  const stars = el("div", "flex justify-center gap-1");
+
+  for (let i = 1; i <= 5; i++) {
+    stars.append(btn(
+      "★",
+      "star-btn text-sm " + (i <= totsu ? "active" : "inactive"),
+      () => {
+        if (!owned) {
+          setTotsu(item.id, i);
+        } else {
+          setTotsu(item.id, i === totsu ? i - 1 : i);
+        }
+      },
+      `${i}凸に設定`
+    ));
+  }
+
+  footer.append(stars);
+
+  const controls = el(
+    "div",
+    "flex justify-between items-center mt-2"
+  );
+
+  controls.append(btn(
+    "−",
+    "w-7 h-6 rounded bg-slate-800",
+    () => {
+      if (owned) {
+        setTotsu(item.id, totsu - 1);
+      } else {
+        setOwned(item.id, true);
+      }
+    },
+    "凸数を1減らす"
+  ));
+
+  controls.append(el(
+    "span",
+    "text-[10px]",
+    owned ? `${totsu}/5凸` : "未所持"
+  ));
+
+  controls.append(btn(
+    "+",
+    "w-7 h-6 rounded bg-pink-600",
+    () => {
+      if (owned) {
+        setTotsu(item.id, totsu + 1);
+      } else {
+        setTotsu(item.id, 0);
+      }
+    },
+    "凸数を1増やす"
+  ));
+
+  footer.append(controls);
+  card.append(footer);
+
+  return card;
+}
+
+/* ==============================
+   検索・絞り込み・統計
+============================== */
+
+function render() {
+  const search = document
+    .getElementById("search")
+    .value.trim()
+    .toLocaleLowerCase();
+
+  const elementFilter =
+    document.getElementById("elementFilter").value;
+
+  const roleFilter =
+    document.getElementById("roleFilter").value;
+
+  const statusFilter =
+    document.getElementById("statusFilter").value;
+
+  const grid = document.getElementById("cardGrid");
+  grid.replaceChildren();
+
+  let ownedCount = 0;
+  let zeroCount = 0;
+  let maxCount = 0;
+  let unsetCount = 0;
+  let shown = 0;
+
+  const fragment = document.createDocumentFragment();
+
+  for (const item of masterData) {
+    const state = stateOf(item.id);
+
+    if (state.owned) {
+      ownedCount++;
+
+      if (state.totsu === 0) zeroCount++;
+      if (state.totsu === 5) maxCount++;
+    }
+
+    if (item.elem === "未設定" || item.role === "未設定") {
+      unsetCount++;
+    }
+
+    if (
+      search &&
+      !`${item.title} ${item.id}`.toLocaleLowerCase().includes(search)
+    ) {
+      continue;
+    }
+
+    if (
+      elementFilter !== "ALL" &&
+      item.elem !== elementFilter
+    ) {
+      continue;
+    }
+
+    if (
+      roleFilter !== "ALL" &&
+      item.role !== roleFilter
+    ) {
+      continue;
+    }
+
+    if (statusFilter === "OWNED" && !state.owned) continue;
+    if (statusFilter === "UNOWNED" && state.owned) continue;
+
+    if (
+      statusFilter === "ZERO" &&
+      !(state.owned && state.totsu === 0)
+    ) {
+      continue;
+    }
+
+    if (
+      statusFilter === "MAX" &&
+      !(state.owned && state.totsu === 5)
+    ) {
+      continue;
+    }
+
+    shown++;
+    fragment.append(makeCard(item));
+  }
+
+  grid.append(fragment);
+
+  document.getElementById("statTotal").textContent =
+    masterData.length;
+
+  document.getElementById("statOwned").textContent =
+    ownedCount;
+
+  document.getElementById("statRate").textContent =
+    masterData.length
+      ? Math.round(ownedCount / masterData.length * 100) + "%"
+      : "0%";
+
+  document.getElementById("statMax").textContent =
+    maxCount;
+
+  document.getElementById("countDisplay").textContent =
+    shown;
+
+  document.getElementById("ownedDisplay").textContent =
+    ownedCount;
+
+  document.getElementById("zeroCount").textContent =
+    zeroCount;
+
+  document.getElementById("maxCount").textContent =
+    maxCount;
+
+  document.getElementById("unsetCount").textContent =
+    unsetCount;
+
+  document.getElementById("emptyMessage").classList.toggle(
+    "hidden",
+    shown !== 0
+  );
+}
+
+/* ==============================
+   バックアップ・復元
+============================== */
+
+function exportData() {
+  const backup = {
+    version: 3,
+    exportedAt: new Date().toISOString(),
+    masterData,
+    userState
+  };
+
+  const blob = new Blob(
+    [JSON.stringify(backup, null, 2)],
+    { type: "application/json;charset=utf-8" }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = "madodora_backup.json";
+  a.click();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.getElementById("importFile").addEventListener(
+  "change",
+  async event => {
+    const file = event.target.files[0];
+
+    if (!file) return;
+
+    try {
+      const data = JSON.parse(await file.text());
+
+      if (!Array.isArray(data.masterData) || !data.userState) {
+        throw new Error("バックアップ形式が不正です");
+      }
+
+      const nextMaster = normalizeMaster(data.masterData);
+      const nextState = normalizeState(data.userState);
+
+      if (!confirm("現在のデータをバックアップで置き換えますか？")) {
+        return;
+      }
+
+      const oldMaster = masterData;
+      const oldState = userState;
+
+      masterData = nextMaster;
+      userState = nextState;
+
+      if (!saveAll()) {
+        masterData = oldMaster;
+        userState = oldState;
+        return;
+      }
+
+      localStorage.setItem(MIGRATION_KEY, "1");
+
+      render();
+
+      alert("バックアップを復元しました。");
+
+    } catch (error) {
+      console.error(error);
+      alert("復元に失敗しました。JSONファイルを確認してください。");
+
+    } finally {
+      event.target.value = "";
+    }
+  }
+);
+
+/* ==============================
+   所持状況リセット
+============================== */
+
+function resetOwnership() {
+  if (!confirm("すべての所持状況と凸数をリセットしますか？")) {
+    return;
+  }
+
+  const oldState = userState;
+  userState = {};
+
+  if (!saveAll()) {
+    userState = oldState;
+    return;
+  }
+
+  render();
+}
+
+/* ==============================
+   モーダル操作
+============================== */
+
+document.getElementById("modal").addEventListener("click", event => {
+  if (event.target.id === "modal") {
+    closeModal();
+  }
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    closeModal();
+  }
+});
+
+// Firebase同期モジュールとの受け渡し口。既存の画面機能はそのまま利用します。
+window.getMadodoraSyncData = function () {
+  return { masterData, userState };
+};
+window.applyMadodoraSyncData = function (data) {
+  if (!data || !Array.isArray(data.masterData) || !data.userState || typeof data.userState !== "object") {
+    throw new Error("クラウドデータの形式が不正です。ローカルデータは変更していません。");
+  }
+  masterData = normalizeMaster(data.masterData);
+  userState = normalizeState(data.userState);
+  localStorage.setItem(MASTER_KEY, JSON.stringify(masterData));
+  localStorage.setItem(STATE_KEY, JSON.stringify(userState));
+  render();
+};
+
+window.addEventListener("DOMContentLoaded", init);
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDtyKVDPJ7DMLUMy1v9remBnMRVAr_WVU",
+  authDomain: "magiaexedra-be838.firebaseapp.com",
+  projectId: "magiaexedra-be838",
+  storageBucket: "magiaexedra-be838.firebasestorage.app",
+  messagingSenderId: "104102040427",
+  appId: "1:104102040427:web:692a1e975508e21b51322e",
+  measurementId: "G-JVHW0FE1L"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+const statusEl = document.getElementById("cloudStatus");
+const userEl = document.getElementById("cloudUser");
+const loginBtn = document.getElementById("cloudLoginBtn");
+const logoutBtn = document.getElementById("cloudLogoutBtn");
+let currentUser = null;
+let unsubscribeSnapshot = null;
+let saveTimer = null;
+let applyingRemote = false;
+let lastRemoteFingerprint = "";
+
+function status(message, error = false) {
+  statusEl.textContent = message;
+  statusEl.className = "text-sm " + (error ? "text-red-300" : "text-slate-300");
+}
+function stateDoc(user) {
+  return doc(db, "users", user.uid, "appData", "madodora");
+}
+function getLocalData() {
+  const data = window.getMadodoraSyncData();
+  return { masterData: data.masterData, userState: data.userState };
+}
+function fingerprint(data) {
+  return JSON.stringify({ masterData: data.masterData, userState: data.userState });
+}
+async function saveToCloud() {
+  if (!currentUser || applyingRemote) return;
+  const data = getLocalData();
+  const fp = fingerprint(data);
+  if (fp === lastRemoteFingerprint) return;
+  status("同期中…");
+  try {
+    await setDoc(stateDoc(currentUser), {
+      ...data,
+      schemaVersion: 1,
+      updatedAt: serverTimestamp()
+    });
+    lastRemoteFingerprint = fp;
+    status("同期済み：このGoogleアカウントのデータを保存しました");
+  } catch (error) {
+    console.error("Firestore save failed", error);
+    status("同期に失敗しました。Firestoreのルールと接続を確認してください。", true);
+  }
+}
+window.queueMadodoraCloudSave = function () {
+  if (!currentUser || applyingRemote) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToCloud, 800);
+};
+
+loginBtn.addEventListener("click", async () => {
+  loginBtn.disabled = true;
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error(error);
+    status("ログインできませんでした：" + (error.message || error.code), true);
+  } finally {
+    loginBtn.disabled = false;
+  }
+});
+logoutBtn.addEventListener("click", async () => {
+  try { await signOut(auth); }
+  catch (error) { status("ログアウトに失敗しました。", true); console.error(error); }
+});
+
+onAuthStateChanged(auth, async user => {
+  currentUser = user;
+  if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+  clearTimeout(saveTimer);
+  if (!user) {
+    loginBtn.classList.remove("hidden");
+    logoutBtn.classList.add("hidden");
+    userEl.textContent = "";
+    status("未ログイン：この端末内に保存されています");
+    lastRemoteFingerprint = "";
+    return;
+  }
+  loginBtn.classList.add("hidden");
+  logoutBtn.classList.remove("hidden");
+  userEl.textContent = "ログイン中：" + (user.email || user.displayName || user.uid);
+  status("クラウドデータを確認中…");
+  try {
+    const ref = stateDoc(user);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      // クラウドにデータがない初回だけ、現在の端末のデータを移行する。
+      const local = getLocalData();
+      await setDoc(ref, { ...local, schemaVersion: 1, updatedAt: serverTimestamp() });
+      lastRemoteFingerprint = fingerprint(local);
+      status("初回移行完了：この端末の所持状況・凸数をクラウドに保存しました");
+    } else {
+      const remote = snap.data();
+      if (!Array.isArray(remote.masterData) || !remote.userState || typeof remote.userState !== "object") {
+        throw new Error("クラウドのデータ形式が想定外です。ローカルデータは保持しています。");
+      }
+      applyingRemote = true;
+      window.applyMadodoraSyncData(remote);
+      lastRemoteFingerprint = fingerprint(getLocalData());
+      applyingRemote = false;
+      status("同期済み：クラウドの所持状況・凸数を読み込みました");
+    }
+    unsubscribeSnapshot = onSnapshot(ref, snapNow => {
+      if (!snapNow.exists() || applyingRemote) return;
+      const remote = snapNow.data();
+      if (!Array.isArray(remote.masterData) || !remote.userState || typeof remote.userState !== "object") return;
+      const remoteFp = fingerprint(remote);
+      if (remoteFp === lastRemoteFingerprint) return;
+      applyingRemote = true;
+      try {
+        window.applyMadodoraSyncData(remote);
+        lastRemoteFingerprint = fingerprint(getLocalData());
+        status("他の端末からの変更を同期しました");
+      } catch (error) {
+        console.error(error);
+        status("同期データを適用できませんでした。ローカルデータは保持しています。", true);
+      } finally { applyingRemote = false; }
+    }, error => {
+      console.error("Firestore listener failed", error);
+      status("リアルタイム同期に失敗しました。Firestoreのルールを確認してください。", true);
+    });
+  } catch (error) {
+    applyingRemote = false;
+    console.error("Cloud initialization failed", error);
+    status("クラウド同期を開始できませんでした。ローカルデータは保持しています。", true);
+  }
+});
+</script>
+</body>
+</html>
